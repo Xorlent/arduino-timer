@@ -75,6 +75,7 @@ class Timer {
     at(unsigned long time, handler_t h, T opaque = T())
     {
         const unsigned long now = time_func();
+        if (time < now) return add_task(now, 0, h, opaque);
         return add_task(now, time - now, h, opaque);
     }
 
@@ -120,15 +121,16 @@ class Timer {
     template <typename R> void
     tick()
     {
+        const unsigned long t = time_func();
+        
         timer_foreach_task(task) {
             if (task->handler) {
-                const unsigned long t = time_func();
                 const unsigned long duration = t - task->start;
 
                 if (duration >= task->expires) {
-                    task->repeat = task->handler(task->opaque) && task->repeat;
+                    task->interval = task->handler(task->opaque) && task->interval;
 
-                    if (task->repeat) task->start = t;
+                    if (task->interval) task->start = task->start + task->expires;
                     else remove(task);
                 }
             }
@@ -198,7 +200,7 @@ class Timer {
         T opaque; /* argument given to the callback handler */
         unsigned long start,
                       expires, /* when the task expires */
-                      repeat; /* repeat task */
+                      interval; /* repeat interval in time units (0 = one-shot) */
     } tasks[max_tasks];
 
     inline
@@ -209,7 +211,7 @@ class Timer {
         task->opaque = T();
         task->start = 0;
         task->expires = 0;
-        task->repeat = 0;
+        task->interval = 0;
     }
 
     inline
@@ -226,7 +228,7 @@ class Timer {
     inline
     struct task *
     add_task(unsigned long start, unsigned long expires,
-             handler_t h, T opaque, bool repeat = 0)
+             handler_t h, T opaque, unsigned long interval = 0)
     {
         struct task * const slot = next_task_slot();
 
@@ -236,7 +238,7 @@ class Timer {
         slot->opaque = opaque;
         slot->start = start;
         slot->expires = expires;
-        slot->repeat = repeat;
+        slot->interval = interval;
 
         return slot;
     }
